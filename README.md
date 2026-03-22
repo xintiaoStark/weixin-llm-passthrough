@@ -1,13 +1,15 @@
 # 微信 LLM 透传插件
-### WeChat → Any LLM Passthrough Plugin for OpenClaw
+### WeChat → Any LLM / Claude Code Plugin for OpenClaw
 
-> 把微信消息**直接透传**给任意 OpenAI 兼容接口（ChatGPT / Claude / 文心 / 豆包 / FastGPT / Dify / 扣子……），无任何中间 agent 逻辑，对话数据直连你的 API，安全可控。
+> 把微信消息**直接透传**给任意 OpenAI 兼容接口（ChatGPT / Claude / 文心 / 豆包 / FastGPT / Dify / 扣子……），或直接接入本机 **Claude Code**，让 AI 在你的电脑上读写文件、执行代码。对话数据直连你的 API，安全可控。
 
 ---
 
 ## ✨ 特性
 
 - 🔌 **零改造接入**：填 Base URL + API Key 即可，支持所有 OpenAI 兼容接口
+- 🤖 **Claude Code 模式**：接入本机 Claude Code CLI，可读写项目文件、执行命令
+- 🔀 **双模式随时切换**：每个用户独立模式，微信发 `/mode claude` 或 `/mode agent` 即可切换
 - 🚀 **热更新**：修改配置无需重启，立即生效
 - 🖼️ **图片支持**：收到图片自动上传图床，转 URL 发给 LLM（支持视觉模型）
 - 🔒 **数据安全**：对话数据从本机直接到你的 API，不经过任何第三方
@@ -24,6 +26,7 @@
 | **Node.js** | 版本 >= 22，[点击下载](https://nodejs.org) |
 | **微信账号** | 用于绑定的微信号（建议用小号） |
 | **LLM API** | 任意 OpenAI 兼容接口的 Base URL + API Key |
+| **Claude Code**（可选） | 使用 Claude Code 模式时需要，[安装说明](https://claude.ai/code) |
 
 ---
 
@@ -134,8 +137,10 @@ node D:\weixin-llm-passthrough\config-ui\server.js
 | **API Key** | 你的密钥 | `sk-xxxxxxxxxxxxxxxx` |
 | **模型名** | 调用的模型 | `gpt-4o` |
 | **imgbb Key** | 图片识别用（可选） | [免费获取](https://api.imgbb.com) |
+| **默认模式** | agent（LLM）或 claude（本地 Claude Code） | `agent` |
+| **Claude Code 工作目录** | 使用 Claude Code 模式时的项目路径 | `D:\my-project` |
 
-填完后点 **「保存配置」**，再点 **「测试连接」**，看到 `✅ 连接成功` 说明 API 配置正确。
+填完后点 **「保存配置」**，再点 **「测试 Agent 连接」**，看到 `✅ 连接成功` 说明 API 配置正确。
 
 > **常见 Base URL 示例：**
 > - OpenAI：`https://api.openai.com/v1`
@@ -177,6 +182,62 @@ openclaw gateway
 ```
 
 ✅ **全部完成！** 现在发消息给绑定的微信号，就会收到 LLM 的回复。
+
+---
+
+## 🤖 Claude Code 模式
+
+> 让微信直接控制本机的 Claude Code CLI，可以读写项目文件、执行代码、分析报错。
+
+### 前置条件
+
+1. 本机已安装 Claude Code CLI：参考 [claude.ai/code](https://claude.ai/code)
+2. 已完成 Claude Code 登录（运行一次 `claude` 确认可用）
+3. 在配置页面填写 **Claude Code 工作目录**（Claude 读写文件的根目录）
+
+### 切换方式（微信内发送）
+
+| 命令 | 效果 |
+|------|------|
+| `/mode` | 查看当前模式 |
+| `/mode claude` | 切换到 Claude Code 模式 |
+| `/mode agent` | 切换回 LLM API 透传模式 |
+| `/new` | 清除 Claude Code 会话，开启新对话 |
+
+### 消息流（Claude Code 模式）
+
+```
+微信用户发消息
+      │
+      ▼
+OpenClaw 网关
+      │
+      ▼
+weixin-passthrough 插件
+      │  检查用户当前模式
+      ▼
+Claude Code CLI（本地子进程）
+      │  读写 claudeCodeCwd 目录下的文件
+      │  执行命令、分析代码
+      ▼
+回复内容 → 发回微信用户
+```
+
+### 使用示例
+
+```
+你：/mode claude
+Bot：✅ 已切换到 Claude Code 模式
+
+你：帮我看看 src/index.ts 有没有 bug
+Bot：我来看一下...（Claude Code 读取文件，分析代码，给出回复）
+
+你：帮我写一个 utils/format.ts
+Bot：好的，我来创建这个文件...（Claude Code 实际写入文件）
+
+你：/new
+Bot：✅ Claude Code 会话已重置，下条消息将开启全新对话。
+```
 
 ---
 
@@ -244,7 +305,7 @@ openclaw gateway
 
 ---
 
-## 🔄 消息流
+## 🔄 消息流（Agent 模式）
 
 ```
 微信用户发消息
@@ -285,10 +346,15 @@ A：检查步骤：
 A：配置 imgbb API Key 后重试（见上方图片识别章节）。
 
 **Q：怎么让 AI 记住上下文（多轮对话）？**
-A：在你的 AI 服务端开启对话记忆功能：
+A：Agent 模式下，在你的 AI 服务端开启对话记忆功能：
 - **FastGPT**：应用设置 → 对话记忆轮数（设置为大于 0 的数字）
 - **Dify**：开启对话变量/记忆功能
 - **扣子**：Bot 设置里开启记忆插件
+
+Claude Code 模式天然支持多轮对话，上下文由 Claude Code 本地维护。
+
+**Q：Claude Code 模式提示"未找到 claude 命令"？**
+A：确认已安装 Claude Code CLI（`claude --version` 可以运行），Windows 用户需确保 npm 全局 bin 目录在 PATH 中。
 
 **Q：支持群聊吗？**
 A：目前仅支持私聊。
@@ -305,7 +371,12 @@ weixin-llm-passthrough/
 ├── weixin-passthrough/              # OpenClaw 插件（核心）
 │   ├── src/
 │   │   ├── messaging/
-│   │   │   └── process-message.ts  # 核心透传逻辑（唯一改动文件）
+│   │   │   ├── process-message.ts  # 核心逻辑：双模式分发
+│   │   │   └── slash-commands.ts   # 斜杠指令（/mode、/new 等）
+│   │   ├── claude-code/
+│   │   │   └── claude-runner.ts    # Claude Code CLI 子进程调用
+│   │   ├── mode/
+│   │   │   └── user-mode-store.ts  # 用户模式持久化
 │   │   ├── cdn/
 │   │   │   └── image-upload.ts     # 图床上传（imgbb / 0x0.st / litterbox）
 │   │   └── config/
