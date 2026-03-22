@@ -293,6 +293,7 @@ export async function processOneMessage(
         model: llmCfg.model,
         messages,
         stream: false,
+        user: senderId,  // 微信用户固定 ID，AI 端用于维护会话上下文
       }),
     });
 
