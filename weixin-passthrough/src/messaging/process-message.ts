@@ -293,7 +293,8 @@ export async function processOneMessage(
         model: llmCfg.model,
         messages,
         stream: false,
-        user: senderId,  // 微信用户固定 ID，AI 端用于维护会话上下文
+        user: senderId,       // OpenAI 标准字段，通用
+        chatId: senderId,     // FastGPT 专用：固定 chatId 让 FastGPT 自动维护历史
       }),
     });
 
