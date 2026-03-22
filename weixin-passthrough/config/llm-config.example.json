@@ -1,0 +1,6 @@
+{
+  "baseUrl": "https://api.openai.com/v1",
+  "apiKey": "sk-your-api-key-here",
+  "model": "gpt-4o",
+  "imgbbApiKey": ""
+}

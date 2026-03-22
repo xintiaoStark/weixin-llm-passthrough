@@ -1,0 +1,45 @@
+{
+  "name": "openclaw-weixin",
+  "version": "1.0.0",
+  "description": "OpenClaw Weixin channel with direct LLM passthrough",
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "src/",
+    "index.ts",
+    "openclaw.plugin.json"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "prepublishOnly": "npm run typecheck && npm run build"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "qrcode-terminal": "0.12.0",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "channel": {
+      "id": "openclaw-weixin",
+      "label": "openclaw-weixin",
+      "selectionLabel": "openclaw-weixin",
+      "docsPath": "/channels/openclaw-weixin",
+      "docsLabel": "openclaw-weixin",
+      "blurb": "Weixin channel with direct LLM passthrough",
+      "order": 75
+    },
+    "install": {
+      "npmSpec": "weixin-passthrough",
+      "defaultChoice": "npm"
+    }
+  }
+}

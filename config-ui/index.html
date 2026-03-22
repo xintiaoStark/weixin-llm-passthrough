@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>微信 LLM 透传配置</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@300;400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #1a1a1a;
+    --ink-2: #3d3d3d;
+    --ink-3: #6b6b6b;
+    --paper: #faf9f7;
+    --paper-2: #f0ede8;
+    --sidebar-bg: #111110;
+    --sidebar-fg: #e8e4dc;
+    --sidebar-fg2: #8a8578;
+    --accent: #c84b31;
+    --accent-light: #e8604a;
+    --green: #2d6a4f;
+    --green-bg: #d8f3dc;
+    --red: #9d2932;
+    --red-bg: #ffe4e6;
+    --border: #ddd9d0;
+    --input-bg: #fff;
+    --focus: #c84b31;
+    --mono: 'JetBrains Mono', monospace;
+    --serif: 'Noto Serif SC', serif;
+    --sans: 'Noto Sans SC', sans-serif;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-weight: 400;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .layout {
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 280px;
+    flex-shrink: 0;
+    background: var(--sidebar-bg);
+    color: var(--sidebar-fg);
+    padding: 48px 32px;
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .sidebar::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(ellipse at 20% 10%, rgba(200,75,49,0.12) 0%, transparent 55%),
+      radial-gradient(ellipse at 80% 90%, rgba(200,75,49,0.06) 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  .sidebar-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 40px;
+    position: relative;
+  }
+
+  .logo-mark {
+    width: 36px;
+    height: 36px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    font-family: var(--serif);
+    letter-spacing: -0.5px;
+  }
+
+  .logo-text {
+    font-family: var(--serif);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--sidebar-fg);
+    letter-spacing: 0.02em;
+    line-height: 1.3;
+  }
+
+  .logo-text span {
+    display: block;
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--sidebar-fg2);
+    font-family: var(--sans);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-top: 1px;
+  }
+
+  .sidebar-divider {
+    height: 1px;
+    background: rgba(255,255,255,0.07);
+    margin: 0 0 32px;
+  }
+
+  .sidebar-desc {
+    font-size: 13px;
+    color: var(--sidebar-fg2);
+    line-height: 1.75;
+    flex: 1;
+  }
+
+  .sidebar-desc p + p {
+    margin-top: 14px;
+  }
+
+  .sidebar-desc strong {
+    color: var(--sidebar-fg);
+    font-weight: 500;
+  }
+
+  .badge-hot {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(200,75,49,0.18);
+    border: 1px solid rgba(200,75,49,0.35);
+    color: #e8816a;
+    font-size: 11px;
+    font-family: var(--mono);
+    letter-spacing: 0.04em;
+    padding: 3px 9px;
+    border-radius: 100px;
+    margin-top: 20px;
+  }
+
+  .badge-hot::before {
+    content: '⚡';
+    font-size: 10px;
+  }
+
+  .sidebar-footer {
+    font-size: 11px;
+    color: rgba(138,133,120,0.6);
+    font-family: var(--mono);
+  }
+
+  /* ── Main ── */
+  .main {
+    flex: 1;
+    padding: 60px 64px;
+    max-width: 680px;
+  }
+
+  .page-header {
+    margin-bottom: 48px;
+  }
+
+  .page-header h1 {
+    font-family: var(--serif);
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+    line-height: 1.3;
+    margin-bottom: 8px;
+  }
+
+  .page-header p {
+    font-size: 14px;
+    color: var(--ink-3);
+    line-height: 1.6;
+  }
+
+  /* ── Form ── */
+  .form-section {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+
+  .form-section-header {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--paper);
+  }
+
+  .form-section-header h2 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-2);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .section-number {
+    width: 22px;
+    height: 22px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: var(--mono);
+    flex-shrink: 0;
+  }
+
+  .form-body {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .field label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-2);
+    letter-spacing: 0.01em;
+  }
+
+  .field-hint {
+    font-size: 11px;
+    color: var(--ink-3);
+    margin-top: -3px;
+  }
+
+  .input-wrap {
+    position: relative;
+  }
+
+  .input-wrap input {
+    width: 100%;
+    height: 44px;
+    padding: 0 14px;
+    background: var(--input-bg);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: var(--mono);
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    -webkit-appearance: none;
+  }
+
+  .input-wrap input::placeholder {
+    color: #bbb8b0;
+    font-family: var(--sans);
+    font-size: 13px;
+  }
+
+  .input-wrap input:focus {
+    border-color: var(--focus);
+    box-shadow: 0 0 0 3px rgba(200,75,49,0.1);
+  }
+
+  .input-wrap input.has-icon {
+    padding-right: 44px;
+  }
+
+  .input-icon-btn {
+    position: absolute;
+    right: 0;
+    top: 0;
+    height: 44px;
+    width: 44px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink-3);
+    transition: color 0.15s;
+    border-radius: 0 8px 8px 0;
+  }
+
+  .input-icon-btn:hover { color: var(--ink); }
+  .input-icon-btn svg { width: 16px; height: 16px; }
+
+  /* ── Buttons ── */
+  .action-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    height: 44px;
+    padding: 0 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    font-family: var(--sans);
+    cursor: pointer;
+    border: 1.5px solid transparent;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.15s;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+
+  .btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: var(--accent-light);
+    border-color: var(--accent-light);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(200,75,49,0.3);
+  }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--ink-2);
+    border-color: var(--border);
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--paper-2);
+    border-color: #c0bbb0;
+    transform: translateY(-1px);
+  }
+
+  .btn .spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+
+  .btn.loading .spinner { display: block; }
+  .btn.loading .btn-text { opacity: 0.6; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Status Messages ── */
+  .status-area {
+    min-height: 0;
+    overflow: hidden;
+    transition: all 0.25s ease;
+  }
+
+  .status-msg {
+    padding: 14px 18px;
+    border-radius: 8px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    animation: fadeSlideIn 0.2s ease;
+  }
+
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .status-msg.success {
+    background: var(--green-bg);
+    color: var(--green);
+    border: 1px solid #b7e4c7;
+  }
+
+  .status-msg.error {
+    background: var(--red-bg);
+    color: var(--red);
+    border: 1px solid #fecdd3;
+  }
+
+  .status-icon { flex-shrink: 0; font-size: 15px; margin-top: 1px; }
+
+  .status-detail {
+    margin-top: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    opacity: 0.8;
+    word-break: break-all;
+    background: rgba(0,0,0,0.05);
+    padding: 6px 8px;
+    border-radius: 5px;
+  }
+
+  /* ── Info Panel ── */
+  .info-panel {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 22px;
+    margin-top: 8px;
+  }
+
+  .info-panel h3 {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-bottom: 12px;
+  }
+
+  .info-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    font-size: 13px;
+    color: var(--ink-2);
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .info-row:last-child { border-bottom: none; }
+
+  .info-key {
+    width: 80px;
+    flex-shrink: 0;
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--ink-3);
+    padding-top: 2px;
+  }
+
+  .info-val {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    word-break: break-all;
+    color: var(--ink);
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 800px) {
+    .layout { flex-direction: column; }
+    .sidebar {
+      width: 100%;
+      height: auto;
+      position: static;
+      padding: 28px 24px;
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 16px;
+    }
+    .sidebar-logo { margin-bottom: 0; }
+    .sidebar-divider { display: none; }
+    .sidebar-desc { display: none; }
+    .sidebar-footer { display: none; }
+    .main { padding: 32px 24px; }
+  }
+
+  @media (max-width: 500px) {
+    .main { padding: 24px 16px; }
+    .form-body { padding: 16px; }
+    .action-row { flex-direction: column; align-items: stretch; }
+    .btn { justify-content: center; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">微</div>
+      <div class="logo-text">
+        微信 LLM 透传
+        <span>WeChat Passthrough</span>
+      </div>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-desc">
+      <p>配置完成后，微信消息将<strong>直接转发</strong>至您指定的 LLM API，不经过任何中间处理。</p>
+      <p>支持所有 <strong>OpenAI 兼容接口</strong>，包括 Claude、GPT、Gemini 等。</p>
+      <div class="badge-hot">热更新：无需重启即生效</div>
+    </div>
+    <div class="sidebar-footer">localhost:3456</div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="page-header">
+      <h1>LLM 接口配置</h1>
+      <p>填写您的 API 信息，配置保存后立即生效，无需重启服务。</p>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-header">
+        <div class="section-number">1</div>
+        <h2>接口设置</h2>
+      </div>
+      <div class="form-body">
+
+        <div class="field">
+          <label for="baseUrl">Base URL</label>
+          <div class="field-hint">API 基础地址，末尾不含斜杠</div>
+          <div class="input-wrap">
+            <input type="text" id="baseUrl" placeholder="https://api.openai.com/v1" autocomplete="off" spellcheck="false">
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="apiKey">API Key</label>
+          <div class="field-hint">密钥将加密存储在本地，不会上传</div>
+          <div class="input-wrap">
+            <input type="password" id="apiKey" class="has-icon" placeholder="sk-..." autocomplete="new-password" spellcheck="false">
+            <button class="input-icon-btn" id="toggleKey" type="button" title="显示/隐藏">
+              <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+              <svg id="eyeOffIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                <line x1="1" y1="1" x2="23" y2="23"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="model">模型名</label>
+          <div class="field-hint">传给 API 的 model 字段</div>
+          <div class="input-wrap">
+            <input type="text" id="model" placeholder="gpt-4o 或 claude-sonnet-4-6" autocomplete="off" spellcheck="false">
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-header">
+        <div class="section-number">2</div>
+        <h2>图片上传（可选）</h2>
+      </div>
+      <div class="form-body">
+
+        <div class="field">
+          <label for="imgbbApiKey">imgbb API Key</label>
+          <div class="field-hint">收到图片时自动上传图床，再以 URL 发给 LLM。免费获取：<a href="https://api.imgbb.com" target="_blank" style="color:var(--accent)">api.imgbb.com</a>。留空则自动尝试匿名图床。</div>
+          <div class="input-wrap">
+            <input type="password" id="imgbbApiKey" class="has-icon" placeholder="（可选）粘贴 imgbb API Key" autocomplete="off" spellcheck="false">
+            <button class="input-icon-btn" id="toggleImgbbKey" type="button" title="显示/隐藏">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="action-row" style="margin-bottom:20px">
+      <button class="btn btn-primary" id="saveBtn">
+        <div class="spinner"></div>
+        <span class="btn-text">保存配置</span>
+      </button>
+      <button class="btn btn-secondary" id="testBtn">
+        <div class="spinner" style="border-color:rgba(0,0,0,0.15);border-top-color:var(--ink-2)"></div>
+        <span class="btn-text">测试连接</span>
+      </button>
+    </div>
+
+    <div class="status-area" id="statusArea"></div>
+
+    <div class="info-panel" id="currentInfo" style="display:none">
+      <h3>当前配置</h3>
+      <div class="info-row">
+        <div class="info-key">Base URL</div>
+        <div class="info-val" id="infoBaseUrl">—</div>
+      </div>
+      <div class="info-row">
+        <div class="info-key">API Key</div>
+        <div class="info-val" id="infoApiKey">—</div>
+      </div>
+      <div class="info-row">
+        <div class="info-key">模型</div>
+        <div class="info-val" id="infoModel">—</div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+
+  // Eye toggle for API Key
+  $('toggleKey').addEventListener('click', () => {
+    const inp = $('apiKey');
+    const showing = inp.type === 'text';
+    inp.type = showing ? 'password' : 'text';
+    $('eyeIcon').style.display = showing ? '' : 'none';
+    $('eyeOffIcon').style.display = showing ? 'none' : '';
+  });
+
+  // Eye toggle for imgbb key
+  $('toggleImgbbKey').addEventListener('click', () => {
+    const inp = $('imgbbApiKey');
+    inp.type = inp.type === 'text' ? 'password' : 'text';
+  });
+
+  function showStatus(type, icon, msg, detail = '') {
+    const area = $('statusArea');
+    area.innerHTML = `
+      <div class="status-msg ${type}">
+        <span class="status-icon">${icon}</span>
+        <div>
+          <div>${msg}</div>
+          ${detail ? `<div class="status-detail">${detail}</div>` : ''}
+        </div>
+      </div>`;
+  }
+
+  function setLoading(btn, on) {
+    btn.disabled = on;
+    btn.classList.toggle('loading', on);
+  }
+
+  function updateInfoPanel(cfg) {
+    if (!cfg.baseUrl && !cfg.model) return;
+    $('infoBaseUrl').textContent = cfg.baseUrl || '—';
+    $('infoApiKey').textContent = cfg.apiKey || '—';
+    $('infoModel').textContent = cfg.model || '—';
+    $('currentInfo').style.display = '';
+  }
+
+  // Load config on page start
+  (async () => {
+    try {
+      const res = await fetch('/api/config');
+      if (!res.ok) throw new Error('加载失败');
+      const cfg = await res.json();
+      $('baseUrl').value = cfg.baseUrl || '';
+      $('apiKey').value = cfg.apiKey || '';
+      $('model').value = cfg.model || '';
+      $('imgbbApiKey').value = cfg.imgbbApiKey || '';
+      updateInfoPanel(cfg);
+    } catch (e) {
+      // silent — first run
+    }
+  })();
+
+  // Save
+  $('saveBtn').addEventListener('click', async () => {
+    const btn = $('saveBtn');
+    setLoading(btn, true);
+    $('statusArea').innerHTML = '';
+    try {
+      const body = {
+        baseUrl: $('baseUrl').value.trim(),
+        apiKey: $('apiKey').value.trim(),
+        model: $('model').value.trim(),
+        imgbbApiKey: $('imgbbApiKey').value.trim(),
+      };
+      const res = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+      showStatus('success', '✅', '配置已保存，立即生效（无需重启）');
+      updateInfoPanel({ ...body, apiKey: body.apiKey.slice(0, 6) + '****' + body.apiKey.slice(-4) });
+    } catch (e) {
+      showStatus('error', '❌', '保存失败', e.message);
+    } finally {
+      setLoading(btn, false);
+    }
+  });
+
+  // Test
+  $('testBtn').addEventListener('click', async () => {
+    const btn = $('testBtn');
+    setLoading(btn, true);
+    $('statusArea').innerHTML = '';
+    try {
+      const body = {
+        baseUrl: $('baseUrl').value.trim(),
+        apiKey: $('apiKey').value.trim(),
+        model: $('model').value.trim(),
+        imgbbApiKey: $('imgbbApiKey').value.trim(),
+      };
+      const res = await fetch('/api/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        showStatus('success', '✅', '连接成功，API 响应正常', `模型回复：${data.reply || '(空)'}`);
+      } else {
+        showStatus('error', '❌', '连接失败', data.error || '未知错误');
+      }
+    } catch (e) {
+      showStatus('error', '❌', '请求异常', e.message);
+    } finally {
+      setLoading(btn, false);
+    }
+  });
+</script>
+</body>
+</html>
