@@ -11,6 +11,18 @@ export type LlmConfig = {
   model: string;
   /** Optional imgbb API key for image uploads. Get free key at https://api.imgbb.com */
   imgbbApiKey?: string;
+  /**
+   * Default mode for new users.
+   * "agent"  — passthrough to LLM API (default)
+   * "claude" — route to local Claude Code CLI
+   */
+  defaultMode?: "agent" | "claude";
+  /**
+   * Working directory for Claude Code CLI.
+   * Claude Code will read/write files relative to this path.
+   * Defaults to the plugin config directory if not set.
+   */
+  claudeCodeCwd?: string;
 };
 
 /**

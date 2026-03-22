@@ -2,6 +2,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { execFile } from "node:child_process";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.resolve(__dirname, "../weixin-passthrough/config/llm-config.json");
@@ -12,7 +13,7 @@ function readConfig() {
   try {
     return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
   } catch {
-    return { baseUrl: "", apiKey: "", model: "" };
+    return { baseUrl: "", apiKey: "", model: "", defaultMode: "agent", claudeCodeCwd: "" };
   }
 }
 
@@ -57,6 +58,20 @@ async function testConnection(cfg) {
   return data?.choices?.[0]?.message?.content ?? "(ok)";
 }
 
+/** Check if claude CLI is installed and return version string. */
+function checkClaudeCli() {
+  return new Promise((resolve) => {
+    execFile("claude", ["--version"], { timeout: 5000 }, (err, stdout, stderr) => {
+      if (err) {
+        resolve({ ok: false, error: "未找到 claude 命令。请先安装 Claude Code CLI：https://claude.ai/code" });
+      } else {
+        const version = (stdout || stderr).trim().split("\n")[0] ?? "unknown";
+        resolve({ ok: true, version });
+      }
+    });
+  });
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
 
@@ -73,7 +88,7 @@ const server = http.createServer(async (req, res) => {
     const masked = {
       ...cfg,
       apiKey: cfg.apiKey ? cfg.apiKey.slice(0, 6) + "****" + cfg.apiKey.slice(-4) : "",
-      // imgbbApiKey not masked — shown in full so user can verify it
+      // imgbbApiKey and claudeCodeCwd not masked — shown in full
     };
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(masked));
@@ -93,6 +108,8 @@ const server = http.createServer(async (req, res) => {
         apiKey: String(apiKey ?? "").trim(),
         model: String(body.model ?? "").trim(),
         imgbbApiKey: String(imgbbApiKey ?? "").trim(),
+        defaultMode: body.defaultMode === "claude" ? "claude" : "agent",
+        claudeCodeCwd: String(body.claudeCodeCwd ?? "").trim(),
       };
       if (!newCfg.baseUrl || !newCfg.apiKey || !newCfg.model) {
         res.writeHead(400, { "Content-Type": "application/json" });
@@ -109,7 +126,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // POST /api/test — test API connection
+  // POST /api/test — test LLM API connection
   if (req.method === "POST" && url.pathname === "/api/test") {
     try {
       const body = await parseBody(req);
@@ -127,6 +144,14 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: false, error: String(e) }));
     }
+    return;
+  }
+
+  // GET /api/test-claude — check if claude CLI is installed
+  if (req.method === "GET" && url.pathname === "/api/test-claude") {
+    const result = await checkClaudeCli();
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(result));
     return;
   }
 

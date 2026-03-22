@@ -600,6 +600,47 @@
       </div>
     </div>
 
+    <div class="form-section">
+      <div class="form-section-header">
+        <div class="section-number">3</div>
+        <h2>Claude Code 模式（可选）</h2>
+      </div>
+      <div class="form-body">
+
+        <div class="field">
+          <label>默认对话模式</label>
+          <div class="field-hint">新用户首次发消息时使用的模式。用户可通过 <code style="font-family:var(--mono);font-size:11px;background:var(--paper-2);padding:1px 5px;border-radius:3px">/mode agent</code> 或 <code style="font-family:var(--mono);font-size:11px;background:var(--paper-2);padding:1px 5px;border-radius:3px">/mode claude</code> 随时切换。</div>
+          <div style="display:flex;gap:16px;margin-top:4px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;font-size:14px;color:var(--ink-2)">
+              <input type="radio" name="defaultMode" id="modeAgent" value="agent" checked style="accent-color:var(--accent);width:16px;height:16px">
+              💬 Agent 模式（LLM API 透传）
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;font-size:14px;color:var(--ink-2)">
+              <input type="radio" name="defaultMode" id="modeClaude" value="claude" style="accent-color:var(--accent);width:16px;height:16px">
+              🤖 Claude Code 模式
+            </label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="claudeCodeCwd">Claude Code 工作目录</label>
+          <div class="field-hint">Claude Code 读写文件的根目录（项目路径）。切换到 Claude Code 模式时必填。</div>
+          <div class="input-wrap">
+            <input type="text" id="claudeCodeCwd" placeholder="例：C:\Users\yourname\my-project" autocomplete="off" spellcheck="false">
+          </div>
+        </div>
+
+        <div class="action-row">
+          <button class="btn btn-secondary" id="checkClaudeBtn" type="button">
+            <div class="spinner" style="border-color:rgba(0,0,0,0.15);border-top-color:var(--ink-2)"></div>
+            <span class="btn-text">检测 claude 安装</span>
+          </button>
+          <div id="claudeCheckStatus" style="font-size:13px;color:var(--ink-3)"></div>
+        </div>
+
+      </div>
+    </div>
+
     <div class="action-row" style="margin-bottom:20px">
       <button class="btn btn-primary" id="saveBtn">
         <div class="spinner"></div>
@@ -607,7 +648,7 @@
       </button>
       <button class="btn btn-secondary" id="testBtn">
         <div class="spinner" style="border-color:rgba(0,0,0,0.15);border-top-color:var(--ink-2)"></div>
-        <span class="btn-text">测试连接</span>
+        <span class="btn-text">测试 Agent 连接</span>
       </button>
     </div>
 
@@ -685,6 +726,12 @@
       $('apiKey').value = cfg.apiKey || '';
       $('model').value = cfg.model || '';
       $('imgbbApiKey').value = cfg.imgbbApiKey || '';
+      $('claudeCodeCwd').value = cfg.claudeCodeCwd || '';
+      if (cfg.defaultMode === 'claude') {
+        $('modeClaude').checked = true;
+      } else {
+        $('modeAgent').checked = true;
+      }
       updateInfoPanel(cfg);
     } catch (e) {
       // silent — first run
@@ -702,6 +749,8 @@
         apiKey: $('apiKey').value.trim(),
         model: $('model').value.trim(),
         imgbbApiKey: $('imgbbApiKey').value.trim(),
+        defaultMode: $('modeClaude').checked ? 'claude' : 'agent',
+        claudeCodeCwd: $('claudeCodeCwd').value.trim(),
       };
       const res = await fetch('/api/config', {
         method: 'POST',
@@ -714,6 +763,30 @@
       updateInfoPanel({ ...body, apiKey: body.apiKey.slice(0, 6) + '****' + body.apiKey.slice(-4) });
     } catch (e) {
       showStatus('error', '❌', '保存失败', e.message);
+    } finally {
+      setLoading(btn, false);
+    }
+  });
+
+  // Check claude CLI
+  $('checkClaudeBtn').addEventListener('click', async () => {
+    const btn = $('checkClaudeBtn');
+    const statusEl = $('claudeCheckStatus');
+    setLoading(btn, true);
+    statusEl.textContent = '检测中…';
+    try {
+      const res = await fetch('/api/test-claude');
+      const data = await res.json();
+      if (data.ok) {
+        statusEl.style.color = 'var(--green)';
+        statusEl.textContent = `✅ 已安装：${data.version}`;
+      } else {
+        statusEl.style.color = 'var(--red)';
+        statusEl.textContent = `❌ ${data.error}`;
+      }
+    } catch (e) {
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = `❌ 检测失败：${e.message}`;
     } finally {
       setLoading(btn, false);
     }

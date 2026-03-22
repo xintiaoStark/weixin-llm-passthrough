@@ -3,6 +3,8 @@ node_modules/
 
 # 用户配置（含 API Key，不能提交）
 weixin-passthrough/config/llm-config.json
+# 用户对话模式状态（含会话 ID，不提交）
+weixin-passthrough/config/user-states.json
 
 # OpenClaw 账号数据（含微信 token）
 .openclaw/

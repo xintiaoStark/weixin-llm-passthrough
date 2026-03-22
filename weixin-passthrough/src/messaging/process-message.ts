@@ -27,6 +27,8 @@ import { markdownToPlainText, sendMessageWeixin } from "./send.js";
 import { handleSlashCommand } from "./slash-commands.js";
 import { loadLlmConfig } from "../config/llm-config.js";
 import { uploadImageToHost } from "../cdn/image-upload.js";
+import { getUserMode, getClaudeSessionId, setClaudeSessionId } from "../mode/user-mode-store.js";
+import { runClaudeCode } from "../claude-code/claude-runner.js";
 
 const MEDIA_OUTBOUND_TEMP_DIR = path.join(resolvePreferredOpenClawTmpDir(), "weixin/media/outbound-temp");
 
@@ -279,45 +281,79 @@ export async function processOneMessage(
       return;
     }
 
-    const messages = [{ role: "user", content: userContent }];
+    // --- Determine user mode and call appropriate backend ---
+    const userMode = getUserMode(deps.accountId, senderId);
+    logger.info(`processOneMessage: mode=${userMode} from=${senderId}`);
 
-    // --- Call LLM API ---
-    logger.info(`llm-passthrough: POST ${llmCfg.baseUrl}/chat/completions model=${llmCfg.model}`);
-    const llmResponse = await fetch(`${llmCfg.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${llmCfg.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: llmCfg.model,
-        messages,
-        stream: false,
-        user: senderId,       // OpenAI 标准字段，通用
-        chatId: senderId,     // FastGPT 专用：固定 chatId 让 FastGPT 自动维护历史
-      }),
-    });
+    let replyText: string;
 
-    if (!llmResponse.ok) {
-      const errorText = await llmResponse.text().catch(() => "(no body)");
-      throw new Error(`LLM API returned ${llmResponse.status}: ${errorText.slice(0, 300)}`);
+    if (userMode === "claude") {
+      // ── Claude Code mode: spawn local claude CLI ──────────────────────────
+      const cwd = llmCfg.claudeCodeCwd ?? process.cwd();
+      const existingSessionId = getClaudeSessionId(deps.accountId, senderId);
+
+      // In Claude Code mode, send the plain text message (image URL is embedded in textPart if uploaded)
+      const claudeMessage = typeof userContent === "string"
+        ? userContent
+        : (userContent as Array<Record<string, unknown>>)
+            .map((p) => p.type === "text" ? String(p.text) : p.type === "image_url" ? `[图片: ${(p.image_url as Record<string, unknown>)?.url ?? ""}]` : "")
+            .filter(Boolean)
+            .join("\n");
+
+      logger.info(`claude-runner: cwd=${cwd} resume=${existingSessionId ?? "new"}`);
+      const { result, sessionId: newSessionId } = await runClaudeCode({
+        message: claudeMessage,
+        sessionId: existingSessionId,
+        cwd,
+      });
+
+      // Persist session ID for continuity
+      setClaudeSessionId(deps.accountId, senderId, newSessionId);
+      replyText = result;
+      logger.info(`claude-runner: reply len=${replyText.length} sessionId=${newSessionId}`);
+
+    } else {
+      // ── Agent mode: passthrough to LLM API ───────────────────────────────
+      const messages = [{ role: "user", content: userContent }];
+
+      logger.info(`llm-passthrough: POST ${llmCfg.baseUrl}/chat/completions model=${llmCfg.model}`);
+      const llmResponse = await fetch(`${llmCfg.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${llmCfg.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: llmCfg.model,
+          messages,
+          stream: false,
+          user: senderId,       // OpenAI 标准字段，通用
+          chatId: senderId,     // FastGPT 专用：固定 chatId 让 FastGPT 自动维护历史
+        }),
+      });
+
+      if (!llmResponse.ok) {
+        const errorText = await llmResponse.text().catch(() => "(no body)");
+        throw new Error(`LLM API returned ${llmResponse.status}: ${errorText.slice(0, 300)}`);
+      }
+
+      const llmData = await llmResponse.json() as {
+        choices?: Array<{ message?: { content?: string } }>;
+        error?: { message?: string };
+      };
+
+      if (llmData.error?.message) {
+        throw new Error(`LLM API error: ${llmData.error.message}`);
+      }
+
+      const content = llmData.choices?.[0]?.message?.content;
+      if (!content) {
+        throw new Error(`LLM API returned empty content: ${JSON.stringify(llmData).slice(0, 200)}`);
+      }
+
+      replyText = content;
+      logger.info(`llm-passthrough: got reply len=${replyText.length}`);
     }
-
-    const llmData = await llmResponse.json() as {
-      choices?: Array<{ message?: { content?: string } }>;
-      error?: { message?: string };
-    };
-
-    if (llmData.error?.message) {
-      throw new Error(`LLM API error: ${llmData.error.message}`);
-    }
-
-    const replyText = llmData.choices?.[0]?.message?.content;
-    if (!replyText) {
-      throw new Error(`LLM API returned empty content: ${JSON.stringify(llmData).slice(0, 200)}`);
-    }
-
-    logger.info(`llm-passthrough: got reply len=${replyText.length}`);
 
     // --- Send reply to WeChat ---
     const plainText = markdownToPlainText(replyText);
